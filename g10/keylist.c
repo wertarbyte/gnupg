@@ -1459,6 +1459,28 @@ list_keyblock( KBNODE keyblock, int secret, int fpr, void *opaque )
         list_keyblock_print (keyblock, secret, fpr, opaque );
 }
 
+char *
+format_fingerprint(const byte *fpr, const int len)
+{
+    int str_len =     len*2                  /* 2 hex digits per byte */
+                  +  (len*2-1) / 4           /* one space every 4 digits */
+                  + ((len*2-1) / 4 - 1) / 5; /* one additional space after 5 groups */
+    char *fp = xmalloc_clear(str_len + 1);
+
+    int i;
+    int j;
+    for (i = 0, j = 0; i < len && j < str_len-1; i++, j+=2)
+      {
+        if (i && i%2 == 0)
+          fp[j++] = ' ';
+        if (len == 20 && i == 10)
+          fp[j++] = ' ';
+        sprintf(&fp[j], "%02X", fpr[i]);
+      }
+    fp[str_len] = '\0';
+    return fp;
+}
+
 /*
  * standard function to print the finperprint.
  * mode 0: as used in key listings, opt.with_colons is honored
@@ -1555,34 +1577,13 @@ print_fingerprint (PKT_public_key *pk, PKT_secret_key *sk, int mode )
             fputs (text, fp);
         else
             tty_printf ("%s", text);
-	if (n == 20) {
-	    for (i=0; i < n ; i++, i++, p += 2 ) {
-                if (fp) {
-                    if (i == 10 )
-                        putc(' ', fp);
-                    fprintf (fp, " %02X%02X", *p, p[1] );
-                }
-                else {
-                    if (i == 10 )
-                        tty_printf (" ");
-                    tty_printf (" %02X%02X", *p, p[1]);
-                }
-	    }
-	}
-	else {
-	    for (i=0; i < n ; i++, p++ ) {
-                if (fp) {
-                    if (i && !(i%8) )
-                        putc (' ', fp);
-                    fprintf (fp, " %02X", *p );
-                }
-                else {
-                    if (i && !(i%8) )
-                        tty_printf (" ");
-                    tty_printf (" %02X", *p );
-                }
-	    }
-	}
+
+        char *fpr = format_fingerprint(p, n);
+        if (fp)
+            fprintf (fp, " %s", fpr);
+        else
+            tty_printf (" %s", fpr);
+        xfree(fpr);
     }
     if (fp)
         putc ('\n', fp);
