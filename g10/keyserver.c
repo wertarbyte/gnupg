@@ -462,6 +462,8 @@ print_keyrec(int number,struct keyrec *keyrec)
 {
   int i;
 
+  char *fp_str = NULL;
+
   iobuf_writebyte(keyrec->uidbuf,0);
   iobuf_flush_temp(keyrec->uidbuf);
   printf("(%d)\t%s  ",number,iobuf_get_temp_buffer(keyrec->uidbuf));
@@ -503,6 +505,7 @@ print_keyrec(int number,struct keyrec *keyrec)
       printf("key ");
       for(i=0;i<16;i++)
 	printf("%02X",keyrec->desc.u.fpr[i]);
+      fp_str = format_fingerprint(keyrec->desc.u.fpr, 16);
       break;
 
       /* If we get a modern fingerprint, we have the most
@@ -512,6 +515,7 @@ print_keyrec(int number,struct keyrec *keyrec)
 	u32 kid[2];
 	keyid_from_fingerprint(keyrec->desc.u.fpr,20,kid);
 	printf("key %s",keystr(kid));
+        fp_str = format_fingerprint(keyrec->desc.u.fpr, 20);
       }
       break;
 
@@ -539,6 +543,14 @@ print_keyrec(int number,struct keyrec *keyrec)
   if(keyrec->flags&4)
     printf(" (%s)",_("expired"));
 
+  printf("\n");
+  if(fp_str)
+    {
+      printf("\t%s ", _("      Key fingerprint ="));
+      printf("%s", fp_str);
+      xfree(fp_str);
+      printf("\n");
+    }
   printf("\n");
 }
 
