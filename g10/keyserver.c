@@ -982,6 +982,46 @@ direct_uri_map(const char *scheme,unsigned int is_direct)
 #define KEYSERVER_ARGS_NOKEEP " -o \"%o\" \"%i\""
 
 static int
+keyserver_retrieval_filter(PKT_public_key *pk, PKT_secret_key *sk, void *arg)
+{
+  KEYDB_SEARCH_DESC *desc = arg;
+  u32 keyid[2];
+  byte fpr[MAX_FINGERPRINT_LEN];
+  size_t fpr_len = 0;
+
+  /* we definitely do not want to import secret keys! */
+  if (sk) {
+    return 1;
+  }
+
+  fingerprint_from_pk(pk, fpr, &fpr_len);
+  keyid_from_pk(pk, keyid);
+
+  /* compare requested and returned fingerprints if available */
+  if (desc->mode == KEYDB_SEARCH_MODE_FPR20) {
+    if (fpr_len != 20 || memcmp(fpr, desc->u.fpr, 20)) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_FPR16) {
+    if (fpr_len != 16 || memcmp(fpr, desc->u.fpr, 16)) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_LONG_KID) {
+    if (memcmp(keyid, desc->u.kid, sizeof(keyid))) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_SHORT_KID) {
+    if (memcmp(&keyid[1], &desc->u.kid[1], 1)) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int
 keyserver_spawn(enum ks_action action,strlist_t list,KEYDB_SEARCH_DESC *desc,
 		int count,int *prog,unsigned char **fpr,size_t *fpr_len,
 		struct keyserver_spec *keyserver)
@@ -1503,9 +1543,9 @@ keyserver_spawn(enum ks_action action,strlist_t list,KEYDB_SEARCH_DESC *desc,
 	     keyserver.  Keyservers should never accept or send them
 	     but we better protect against rogue keyservers. */
 
-	  import_keys_stream (spawn->fromchild, stats_handle, fpr, fpr_len,
-                              (opt.keyserver_options.import_options
-                               | IMPORT_NO_SECKEY));
+	  import_keys_stream(spawn->fromchild,stats_handle,fpr,fpr_len,
+                             (opt.keyserver_options.import_options | IMPORT_NO_SECKEY),
+			     &keyserver_retrieval_filter, desc);
 
 	  import_print_stats(stats_handle);
 	  import_release_stats_handle(stats_handle);
@@ -2045,7 +2085,7 @@ keyserver_import_cert(const char *name,unsigned char **fpr,size_t *fpr_len)
 
       rc=import_keys_stream (key, NULL, fpr, fpr_len,
                              (opt.keyserver_options.import_options
-                              | IMPORT_NO_SECKEY));
+                              | IMPORT_NO_SECKEY), NULL, NULL);
 
       opt.no_armor=armor_status;
 
