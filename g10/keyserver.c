@@ -829,6 +829,40 @@ show_prompt (ctrl_t ctrl, KEYDB_SEARCH_DESC *desc, int numdesc,
   return err;
 }
 
+static int
+keyserver_retrieval_filter(PKT_public_key *pk, void *arg)
+{
+  KEYDB_SEARCH_DESC *desc = arg;
+  u32 keyid[2];
+  byte fpr[MAX_FINGERPRINT_LEN];
+  size_t fpr_len = 0;
+
+  fingerprint_from_pk(pk, fpr, &fpr_len);
+  keyid_from_pk(pk, keyid);
+
+  /* compare requested and returned fingerprints if available */
+  if (desc->mode == KEYDB_SEARCH_MODE_FPR20) {
+    if (fpr_len != 20 || memcmp(fpr, desc->u.fpr, 20)) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_FPR16) {
+    if (fpr_len != 16 || memcmp(fpr, desc->u.fpr, 16)) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_LONG_KID) {
+    if (memcmp(keyid, desc->u.kid, sizeof(keyid))) {
+      return 1;
+    }
+  }
+  else if (desc->mode == KEYDB_SEARCH_MODE_SHORT_KID) {
+    if (memcmp(&keyid[1], &desc->u.kid[1], 1)) {
+      return 1;
+    }
+  }
+  return 0;
+}
 
 /* This is a callback used by call-dirmngr.c to process the result of
    KS_SEARCH command.  LINE is the actual data line received with all
@@ -1581,7 +1615,8 @@ keyserver_get (ctrl_t ctrl, KEYDB_SEARCH_DESC *desc, int ndesc,
          a temp iobuf for each key. */
 
       import_keys_es_stream (ctrl, datastream, stats_handle, NULL, NULL,
-                             opt.keyserver_options.import_options);
+                             opt.keyserver_options.import_options,
+                             &keyserver_retrieval_filter, desc);
 
       import_print_stats (stats_handle);
       import_release_stats_handle (stats_handle);
@@ -1672,7 +1707,8 @@ keyserver_fetch (ctrl_t ctrl, strlist_t urilist)
 
           stats_handle = import_new_stats_handle();
           import_keys_es_stream (ctrl, datastream, stats_handle, NULL, NULL,
-                                 opt.keyserver_options.import_options);
+                                 opt.keyserver_options.import_options,
+                                 NULL, NULL);
 
           import_print_stats (stats_handle);
           import_release_stats_handle (stats_handle);
@@ -1721,7 +1757,8 @@ keyserver_import_cert (ctrl_t ctrl,
       opt.no_armor=1;
 
       err = import_keys_es_stream (ctrl, key, NULL, fpr, fpr_len,
-                                  opt.keyserver_options.import_options);
+                                  opt.keyserver_options.import_options,
+                                  NULL, NULL);
 
       opt.no_armor=armor_status;
 
